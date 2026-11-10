@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Розклад пар</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a quiet grid of days. Times sit in a mono gutter, hairlines replace cards, and the accent marks only today and the current pair. */
+:root {
+  --bg: #F5F6F8;
+  --surface: #FFFFFF;
+  --ink: #15181E;
+  --muted: #636B7A;
+  --line: #E2E5EA;
+  --accent: #2446D8;
+  --on-accent: #FFFFFF;
+  --accent-soft: #E8ECFC;
+  --warn: #B3470B;
+  --scrim: rgba(15, 17, 21, 0.45);
+  --font: "Onest", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1115; --surface: #171A20; --ink: #ECEEF2; --muted: #98A0AE; --line: #272B33;
+    --accent: #8AA2FF; --on-accent: #0E1220; --accent-soft: #1C2238; --warn: #F2A266; --scrim: rgba(0, 0, 0, 0.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1115; --surface: #171A20; --ink: #ECEEF2; --muted: #98A0AE; --line: #272B33;
+  --accent: #8AA2FF; --on-accent: #0E1220; --accent-soft: #1C2238; --warn: #F2A266; --scrim: rgba(0, 0, 0, 0.6);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: auto; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+body.locked { overflow: hidden; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-block: 1.5rem 3rem;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Header */
+.top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 1rem 1.5rem; }
+.brand { min-width: 0; }
+h1 { margin: 0; font-size: 1.875rem; line-height: 1.1; font-weight: 600; letter-spacing: -0.025em; text-wrap: balance; }
+#sub { margin: 0.4rem 0 0; color: var(--muted); }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
+
+.btn {
+  min-height: 40px; padding: 0.45rem 1rem; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--surface); font-weight: 500;
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.ghost:hover { border-color: var(--muted); }
+.btn.danger { color: var(--warn); }
+.btn.danger.armed { background: var(--warn); border-color: var(--warn); color: var(--bg); }
+
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.seg button { border: 0; background: none; min-height: 34px; padding: 0.25rem 0.8rem; border-radius: 8px; color: var(--muted); font-weight: 500; }
+.seg button:hover { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 1.5rem; margin-top: 1.5rem; padding-bottom: 1.1rem; border-bottom: 1px solid var(--line); }
+.weeklabel { color: var(--muted); font-family: var(--mono); font-size: 0.8125rem; }
+
+.demo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.5rem 1rem; margin-top: 1.1rem; padding: 0.7rem 0.9rem; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); }
+.demo p { margin: 0; min-width: 0; }
+.demo button { border: 0; background: none; padding: 0.2rem 0; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+
+/* Board */
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 2.25rem 2rem; margin-top: 1.75rem; }
+.board.single { grid-template-columns: minmax(0, 560px); }
+.day { min-width: 0; }
+.dayhead { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding-bottom: 0.6rem; border-bottom: 1.5px solid var(--ink); }
+.day.today .dayhead { border-bottom-color: var(--accent); }
+.dayname { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.15rem 0.6rem; min-width: 0; }
+.dn { font-weight: 600; font-size: 1.0625rem; }
+.dd { color: var(--muted); font-size: 0.875rem; }
+.day.today .dd, .day.today .dn { color: var(--accent); }
+.addday { width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); font-size: 1.25rem; line-height: 1; flex: none; }
+.addday:hover { color: var(--accent); border-color: var(--accent); }
+
+.list { list-style: none; margin: 0; padding: 0; }
+.list li { border-bottom: 1px solid var(--line); }
+.row { display: grid; grid-template-columns: 3.4rem minmax(0, 1fr); gap: 0.85rem; width: 100%; margin: 0; padding: 0.8rem 0.4rem; text-align: left; background: none; border: 0; border-radius: 8px; }
+.row:hover { background: var(--surface); }
+.time { display: flex; flex-direction: column; font-family: var(--mono); font-size: 0.8125rem; line-height: 1.5; }
+.time b { font-weight: 500; }
+.time i { font-style: normal; color: var(--muted); }
+.row.is-now .time b { color: var(--accent); }
+.body { display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; }
+.subj { font-weight: 600; overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 0.8125rem; overflow-wrap: anywhere; }
+.tags { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.3rem; }
+.tag { font-size: 0.6875rem; line-height: 1; padding: 0.22rem 0.5rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+.tag.now { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.tag.next { color: var(--accent); border-color: var(--accent); }
+.tag.warn { color: var(--warn); border-color: var(--warn); }
+.empty { margin: 0; padding: 0.9rem 0.4rem; color: var(--muted); }
+
+.foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.4rem 1.5rem; margin-top: 2.5rem; color: var(--muted); font-size: 0.8125rem; }
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); margin-right: 0.45rem; }
+.dot.ok { background: var(--accent); }
+.dot.err { background: var(--warn); }
+
+/* Read-only view for people who only look at the schedule */
+.ro #addBtn, .ro .addday, .ro #hintEdit, .ro .demo { display: none; }
+.ro .row { cursor: default; }
+.ro .row:hover { background: none; }
+
+/* Dialog */
+.scrim { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; padding: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); background: var(--scrim); }
+.sheet { width: 100%; max-width: 480px; max-height: 100%; overflow-y: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 16px; padding: 1.25rem; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+.sheet h2 { margin: 0; font-size: 1.25rem; font-weight: 600; letter-spacing: -0.015em; }
+.icon { width: 36px; height: 36px; border: 0; background: none; border-radius: 8px; font-size: 1.5rem; line-height: 1; color: var(--muted); }
+.icon:hover { background: var(--surface); color: var(--ink); }
+.field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.9rem; min-width: 0; }
+.field label, .lbl { font-size: 0.8125rem; color: var(--muted); }
+.field input, .field select {
+  width: 100%; min-height: 44px; padding: 0.5rem 0.7rem; font-size: 16px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+}
+.field input:focus, .field select:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.75rem; }
+.pairs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.pairs button { min-width: 42px; height: 38px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; font-family: var(--mono); }
+.pairs button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.hint { margin: 0.1rem 0 0; font-size: 0.75rem; color: var(--muted); }
+.err { margin: 0 0 0.8rem; color: var(--warn); font-size: 0.875rem; }
+.sheet-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.4rem; }
+.grow { flex: 1; }
+
+@media (max-width: 560px) {
+  h1 { font-size: 1.625rem; }
+  .scrim { align-items: flex-end; padding: 0; padding-left: max(0px, env(safe-area-inset-left, 0px)); padding-right: max(0px, env(safe-area-inset-right, 0px)); }
+  .sheet { max-width: none; border-radius: 16px 16px 0 0; border-bottom: 0; padding: 1.25rem 16px calc(1.25rem + env(safe-area-inset-bottom, 0px)); max-height: 94%; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sheet { animation: rise 0.18s ease-out; }
+  @keyframes rise { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
+}
+</style>
+<style>html{color-scheme:light}body{margin:0}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Розклад пар</h1>
+      <p id="sub"></p>
+    </div>
+    <div class="actions">
+      <div class="seg" id="viewSeg" role="group" aria-label="Вигляд">
+        <button type="button" data-v="today" aria-pressed="false">Сьогодні</button>
+        <button type="button" data-v="week" aria-pressed="true">Тиждень</button>
+      </div>
+      <button type="button" class="btn primary" id="addBtn">Додати пару</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="seg" id="filterSeg" role="group" aria-label="Тиждень">
+      <button type="button" data-f="all" aria-pressed="true">Усі тижні</button>
+      <button type="button" data-f="num" aria-pressed="false">Чисельник</button>
+      <button type="button" data-f="den" aria-pressed="false">Знаменник</button>
+    </div>
+    <span class="weeklabel" id="weekLabel"></span>
+  </div>
+
+  <div class="demo" id="demo" hidden>
+    <p>Це приклад розкладу. Додай свою першу пару, і він зникне сам.</p>
+    <button type="button" id="clearDemo">Почати з порожнього</button>
+  </div>
+
+  <main class="board" id="board"></main>
+
+  <footer class="foot">
+    <span><span class="dot" id="dot"></span><span id="status">Збережено в цьому браузері</span></span>
+    <span id="hintEdit">Натисни на пару, щоб змінити або видалити її.</span>
+  </footer>
+</div>
+
+<div class="scrim" id="scrim" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+    <form id="pairForm" novalidate>
+      <div class="sheet-head">
+        <h2 id="sheetTitle">Нова пара</h2>
+        <button type="button" class="icon" id="closeBtn" aria-label="Закрити">×</button>
+      </div>
+      <div class="field">
+        <label for="fSubject">Предмет</label>
+        <input id="fSubject" list="dlSubjects" autocomplete="off" maxlength="80" placeholder="Наприклад, Математичний аналіз">
+      </div>
+      <div class="row2">
+        <div class="field"><label for="fDay">День</label><select id="fDay"></select></div>
+        <div class="field"><label for="fKind">Тип</label><select id="fKind"></select></div>
+      </div>
+      <div class="field">
+        <span class="lbl" id="lblPair">Номер пари</span>
+        <div class="pairs" id="pairs" role="group" aria-labelledby="lblPair"></div>
+        <p class="hint">Підставляє типовий час. Його можна змінити нижче.</p>
+      </div>
+      <div class="row2">
+        <div class="field"><label for="fStart">Початок</label><input type="time" id="fStart"></div>
+        <div class="field"><label for="fEnd">Кінець</label><input type="time" id="fEnd"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label for="fRoom">Аудиторія</label><input id="fRoom" maxlength="30" autocomplete="off" placeholder="214"></div>
+        <div class="field"><label for="fTeacher">Викладач</label><input id="fTeacher" list="dlTeachers" maxlength="60" autocomplete="off" placeholder="Прізвище І. Б."></div>
+      </div>
+      <div class="field">
+        <span class="lbl" id="lblPar">Тиждень</span>
+        <div class="seg" id="parityPick" role="group" aria-labelledby="lblPar"></div>
+      </div>
+      <p class="err" id="fErr" role="alert" hidden></p>
+      <div class="sheet-actions">
+        <button type="button" class="btn danger" id="delBtn" hidden>Видалити</button>
+        <span class="grow"></span>
+        <button type="button" class="btn ghost" id="cancelBtn">Скасувати</button>
+        <button type="submit" class="btn primary">Зберегти</button>
+      </div>
+    </form>
+  </div>
+</div>
+<datalist id="dlSubjects"></datalist>
+<datalist id="dlTeachers"></datalist>
+
+<script>
+(function () {
+  var DAYS = [['Пн', 'Понеділок'], ['Вт', 'Вівторок'], ['Ср', 'Середа'], ['Чт', 'Четвер'], ['Пт', 'Пʼятниця'], ['Сб', 'Субота'], ['Нд', 'Неділя']];
+  var BELLS = [['08:30', '09:50'], ['10:10', '11:30'], ['11:50', '13:10'], ['13:30', '14:50'], ['15:05', '16:25'], ['16:40', '18:00']];
+  var KINDS = ['Лекція', 'Практика', 'Лабораторна', 'Семінар', 'Інше'];
+  var PARITY = [['all', 'Кожен тиждень'], ['num', 'Чисельник'], ['den', 'Знаменник']];
+  var SHORT = { num: 'чис.', den: 'знам.' };
+  var LS_KEY = 'rozklad-v1', UI_KEY = 'rozklad-ui-v1';
+
+  var state = { items: [], demo: false, loading: false, canEdit: true, filter: 'all', view: 'week' };
+  var store = null, saveTimer = null, inflight = 0, editingId = null, opener = null, delTimer = null;
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function toMin(t) { var p = String(t).split(':'); return (+p[0]) * 60 + (+p[1]); }
+  function fromMin(m) { m = Math.max(0, Math.min(1439, m)); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+  function uid() { try { return crypto.randomUUID(); } catch (e) { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8); } }
+  function plural(n, one, few, many) { var a = n % 10, b = n % 100; if (a === 1 && b !== 11) return one; if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return few; return many; }
+  function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  var now0 = new Date();
+  var todayIdx = (now0.getDay() + 6) % 7;
+  var monday = new Date(now0.getFullYear(), now0.getMonth(), now0.getDate() - todayIdx);
+  function dateOf(i) { return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i); }
+  function fmtDate(d) { return d.toLocaleDateString('uk-UA', { day: 'numeric', month: 'long' }); }
+
+  function clean(it) {
+    var ok = /^\d{2}:\d{2}$/;
+    var day = parseInt(it && it.day, 10);
+    if (!it || !it.subject || !ok.test(it.start || '') || !ok.test(it.end || '') || isNaN(day) || day < 0 || day > 6) return null;
+    return {
+      id: String(it.id || uid()), subject: String(it.subject).slice(0, 80), day: day,
+      start: it.start, end: it.end, room: String(it.room || '').slice(0, 30), teacher: String(it.teacher || '').slice(0, 60),
+      kind: KINDS.indexOf(it.kind) >= 0 ? it.kind : 'Інше',
+      parity: SHORT[it.parity] ? it.parity : 'all'
+    };
+  }
+  function cleanAll(arr) { return (Array.isArray(arr) ? arr : []).map(clean).filter(Boolean); }
+
+  function demoItems() {
+    var m = function (d, n, subject, kind, room, teacher, parity) {
+      return { id: 'demo-' + d + '-' + n + '-' + subject.length, day: d, start: BELLS[n][0], end: BELLS[n][1], subject: subject, kind: kind, room: room, teacher: teacher, parity: parity || 'all' };
+    };
+    return [
+      m(0, 0, 'Математичний аналіз', 'Лекція', '214', 'Іваненко О. П.'),
+      m(0, 1, 'Англійська мова', 'Практика', '305', 'Коваль Н. С.'),
+      m(1, 1, 'Програмування', 'Лабораторна', '112', 'Мельник Д. В.', 'num'),
+      m(1, 2, 'Дискретна математика', 'Лекція', '214', 'Шевченко Т. І.'),
+      m(2, 0, 'Фізика', 'Лекція', '401', 'Бондар А. М.'),
+      m(2, 2, 'Фізика', 'Лабораторна', '118', 'Бондар А. М.', 'den'),
+      m(3, 1, 'Математичний аналіз', 'Практика', '210', 'Іваненко О. П.'),
+      m(3, 3, 'Філософія', 'Семінар', '307', 'Ткачук Л. Р.'),
+      m(4, 0, 'Програмування', 'Лекція', '214', 'Мельник Д. В.'),
+      m(4, 1, 'Дискретна математика', 'Практика', '216', 'Шевченко Т. І.')
+    ].map(clean);
+  }
+
+  /* ---------- persistence ---------- */
+  function setStatus(kind) {
+    var txt = {
+      local: 'Збережено лише в цьому браузері',
+      ok: 'Збережено. Усі, хто відкриє сторінку, бачать зміни одразу',
+      view: 'Розклад оновлюється автоматично',
+      wait: 'Зберігаю…',
+      err: 'Не вдалося зберегти для всіх. Спробуй ще раз пізніше.'
+    };
+    if (kind === 'ok' && !state.canEdit) kind = 'view';
+    $('status').textContent = txt[kind] || txt.local;
+    $('dot').className = 'dot' + (kind === 'ok' || kind === 'view' ? ' ok' : kind === 'err' ? ' err' : '');
+  }
+  function persist() {
+    lsSet(LS_KEY, JSON.stringify({ items: state.items }));
+    if (!store) { setStatus('local'); return; }
+    setStatus('wait');
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(flush, 350);
+  }
+  var chain = Promise.resolve();
+  function flush() {
+    saveTimer = null;
+    if (!store) return;
+    var payload = { items: state.items.map(function (x) { return Object.assign({}, x); }), updated: Date.now() };
+    inflight++;
+    chain = chain.then(function () { return store.set(payload); }).then(function () {
+      inflight--; if (!saveTimer && !inflight) setStatus('ok');
+    }, function () { inflight--; setStatus('err'); });
+  }
+  function saveUI() { lsSet(UI_KEY, JSON.stringify({ filter: state.filter, view: state.view })); }
+
+  /* ---------- rendering ---------- */
+  function visible(it) { return state.filter === 'all' || it.parity === 'all' || it.parity === state.filter; }
+  function dayItems(d) {
+    return state.items.filter(function (i) { return i.day === d && visible(i); })
+      .sort(function (a, b) { return toMin(a.start) - toMin(b.start) || toMin(a.end) - toMin(b.end); });
+  }
+  function compat(a, b) { return a === 'all' || b === 'all' || a === b; }
+  function conflicts(list) {
+    var s = {};
+    for (var i = 0; i < list.length; i++) for (var j = i + 1; j < list.length; j++) {
+      var a = list[i], b = list[j];
+      if (compat(a.parity, b.parity) && toMin(a.start) < toMin(b.end) && toMin(b.start) < toMin(a.end)) { s[a.id] = 1; s[b.id] = 1; }
+    }
+    return s;
+  }
+  function rowHtml(it, flag, warn) {
+    var meta = [it.kind, it.room ? 'ауд. ' + it.room : '', it.teacher].filter(Boolean).map(esc).join(' · ');
+    var tags = [];
+    if (flag === 'now') tags.push('<span class="tag now">зараз</span>');
+    if (flag === 'next') tags.push('<span class="tag next">далі</span>');
+    if (it.parity !== 'all') tags.push('<span class="tag">' + SHORT[it.parity] + '</span>');
+    if (warn) tags.push('<span class="tag warn">перетин</span>');
+    return '<li><button type="button" class="row' + (flag === 'now' ? ' is-now' : '') + '" data-id="' + esc(it.id) + '">' +
+      '<span class="time"><b>' + esc(it.start) + '</b><i>' + esc(it.end) + '</i></span>' +
+      '<span class="body"><span class="subj">' + esc(it.subject) + '</span>' +
+      (meta ? '<span class="meta">' + meta + '</span>' : '') +
+      (tags.length ? '<span class="tags">' + tags.join('') + '</span>' : '') + '</span></button></li>';
+  }
+  function dayHtml(d) {
+    var list = dayItems(d), isToday = d === todayIdx, bad = conflicts(list), flags = {};
+    if (isToday) {
+      var n = new Date(), nm = n.getHours() * 60 + n.getMinutes(), nextSet = false;
+      list.forEach(function (it) {
+        if (toMin(it.start) <= nm && nm < toMin(it.end)) flags[it.id] = 'now';
+        else if (!nextSet && toMin(it.start) > nm) { flags[it.id] = 'next'; nextSet = true; }
+      });
+    }
+    var rows = list.length ? '<ol class="list">' + list.map(function (it) { return rowHtml(it, flags[it.id], bad[it.id]); }).join('') + '</ol>'
+      : '<p class="empty">Пар немає</p>';
+    return '<section class="day' + (isToday ? ' today' : '') + '" aria-label="' + DAYS[d][1] + '">' +
+      '<div class="dayhead"><div class="dayname"><span class="dn">' + DAYS[d][0] + '</span><span class="dd">' + esc(fmtDate(dateOf(d))) + (isToday ? ' · сьогодні' : '') + '</span></div>' +
+      '<button type="button" class="addday" data-add="' + d + '" aria-label="Додати пару, ' + DAYS[d][1] + '">+</button></div>' + rows + '</section>';
+  }
+  function renderBoard() {
+    var board = $('board'), days;
+    if (state.loading) { board.className = 'board single'; board.innerHTML = '<p class="empty">Завантажую розклад…</p>'; return; }
+    if (state.view === 'today') days = [todayIdx];
+    else { days = [0, 1, 2, 3, 4, 5]; if (dayItems(6).length) days.push(6); }
+    board.className = 'board' + (state.view === 'today' ? ' single' : '');
+    board.innerHTML = days.map(dayHtml).join('');
+  }
+  function renderChrome() {
+    var td = dayItems(todayIdx), n = td.length;
+    var head = DAYS[todayIdx][1] + ', ' + fmtDate(now0);
+    $('sub').textContent = head + (n ? ' · ' + n + ' ' + plural(n, 'пара', 'пари', 'пар') + ', перша о ' + td[0].start : ' · пар немає');
+    var a = dateOf(0), b = dateOf(6);
+    $('weekLabel').textContent = a.getDate() + (a.getMonth() === b.getMonth() ? '' : ' ' + a.toLocaleDateString('uk-UA', { month: 'short' })) + '–' + b.getDate() + ' ' + b.toLocaleDateString('uk-UA', { month: 'long' });
+    Array.prototype.forEach.call($('viewSeg').children, function (b2) { b2.setAttribute('aria-pressed', String(b2.dataset.v === state.view)); });
+    Array.prototype.forEach.call($('filterSeg').children, function (b2) { b2.setAttribute('aria-pressed', String(b2.dataset.f === state.filter)); });
+    $('demo').hidden = !(state.demo && state.canEdit);
+    document.body.classList.toggle('ro', !state.canEdit);
+  }
+  function render() { renderChrome(); renderBoard(); }
+
+  /* ---------- dialog ---------- */
+  function buildStatic() {
+    $('fDay').innerHTML = DAYS.map(function (d, i) { return '<option value="' + i + '">' + d[1] + '</option>'; }).join('');
+    $('fKind').innerHTML = KINDS.map(function (k) { return '<option>' + k + '</option>'; }).join('');
+    $('pairs').innerHTML = BELLS.map(function (b, i) { return '<button type="button" data-n="' + i + '" aria-pressed="false" title="' + b[0] + '–' + b[1] + '">' + (i + 1) + '</button>'; }).join('');
+    $('parityPick').innerHTML = PARITY.map(function (p) { return '<button type="button" data-p="' + p[0] + '" aria-pressed="false">' + p[1] + '</button>'; }).join('');
+  }
+  function setParity(v) { Array.prototype.forEach.call($('parityPick').children, function (b) { b.setAttribute('aria-pressed', String(b.dataset.p === v)); }); $('parityPick').dataset.value = v; }
+  function syncPairs() {
+    var s = $('fStart').value, e = $('fEnd').value;
+    Array.prototype.forEach.call($('pairs').children, function (b) { var bl = BELLS[+b.dataset.n]; b.setAttribute('aria-pressed', String(bl[0] === s && bl[1] === e)); });
+  }
+  function fillLists() {
+    var subs = {}, ts = {};
+    state.items.forEach(function (i) { subs[i.subject] = 1; if (i.teacher) ts[i.teacher] = 1; });
+    $('dlSubjects').innerHTML = Object.keys(subs).map(function (s) { return '<option value="' + esc(s) + '">'; }).join('');
+    $('dlTeachers').innerHTML = Object.keys(ts).map(function (s) { return '<option value="' + esc(s) + '">'; }).join('');
+  }
+  function openForm(id, day) {
+    opener = document.activeElement;
+    editingId = id || null;
+    var it = id ? state.items.filter(function (x) { return x.id === id; })[0] : null;
+    fillLists();
+    $('fErr').hidden = true;
+    $('delBtn').hidden = !it;
+    $('delBtn').classList.remove('armed'); $('delBtn').textContent = 'Видалити';
+    $('sheetTitle').textContent = it ? 'Змінити пару' : 'Нова пара';
+    if (it) {
+      $('fSubject').value = it.subject; $('fDay').value = it.day; $('fKind').value = it.kind;
+      $('fStart').value = it.start; $('fEnd').value = it.end; $('fRoom').value = it.room; $('fTeacher').value = it.teacher; setParity(it.parity);
+    } else {
+      var d = day == null ? (state.view === 'today' ? todayIdx : todayIdx) : day;
+      var taken = state.demo ? [] : state.items.filter(function (x) { return x.day === d; }).map(function (x) { return x.start; });
+      var bell = BELLS.filter(function (b) { return taken.indexOf(b[0]) < 0; })[0] || BELLS[0];
+      $('fSubject').value = ''; $('fDay').value = d; $('fKind').value = 'Лекція';
+      $('fStart').value = bell[0]; $('fEnd').value = bell[1]; $('fRoom').value = ''; $('fTeacher').value = '';
+      setParity(state.filter === 'all' ? 'all' : state.filter);
+    }
+    syncPairs();
+    $('scrim').hidden = false;
+    document.body.classList.add('locked');
+    setTimeout(function () { $('fSubject').focus(); }, 30);
+  }
+  function closeForm() {
+    $('scrim').hidden = true;
+    document.body.classList.remove('locked');
+    clearTimeout(delTimer);
+    if (opener && opener.focus && document.contains(opener)) opener.focus();
+  }
+  function showErr(msg) { var e = $('fErr'); e.textContent = msg; e.hidden = false; }
+
+  function onSubmit(ev) {
+    ev.preventDefault();
+    var subject = $('fSubject').value.trim(), start = $('fStart').value, end = $('fEnd').value;
+    if (!subject) { showErr('Впиши назву предмета.'); $('fSubject').focus(); return; }
+    if (!start || !end) { showErr('Вкажи час початку і кінця.'); return; }
+    if (toMin(end) <= toMin(start)) { showErr('Кінець має бути пізніше за початок.'); $('fEnd').focus(); return; }
+    var item = clean({
+      id: editingId || uid(), subject: subject, day: +$('fDay').value, start: start, end: end,
+      room: $('fRoom').value.trim(), teacher: $('fTeacher').value.trim(), kind: $('fKind').value, parity: $('parityPick').dataset.value || 'all'
+    });
+    if (state.demo) { state.items = []; state.demo = false; }
+    if (editingId) state.items = state.items.map(function (x) { return x.id === editingId ? item : x; });
+    else state.items.push(item);
+    persist(); render(); closeForm();
+  }
+
+  /* ---------- events ---------- */
+  function bind() {
+    buildStatic();
+    $('addBtn').addEventListener('click', function () { openForm(null, state.view === 'today' ? todayIdx : null); });
+    $('board').addEventListener('click', function (e) {
+      if (!state.canEdit) return;
+      var add = e.target.closest('[data-add]'); if (add) { openForm(null, +add.dataset.add); return; }
+      var row = e.target.closest('.row'); if (row) openForm(row.dataset.id);
+    });
+    $('viewSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; state.view = b.dataset.v; saveUI(); render(); });
+    $('filterSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; state.filter = b.dataset.f; saveUI(); render(); });
+    $('clearDemo').addEventListener('click', function () { state.items = []; state.demo = false; persist(); render(); });
+    $('closeBtn').addEventListener('click', closeForm);
+    $('cancelBtn').addEventListener('click', closeForm);
+    $('scrim').addEventListener('mousedown', function (e) { if (e.target === $('scrim')) closeForm(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('scrim').hidden) closeForm(); });
+    $('pairForm').addEventListener('submit', onSubmit);
+    $('pairs').addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      var bl = BELLS[+b.dataset.n]; $('fStart').value = bl[0]; $('fEnd').value = bl[1]; syncPairs(); $('fErr').hidden = true;
+    });
+    $('parityPick').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) setParity(b.dataset.p); });
+    $('fStart').addEventListener('change', function () {
+      var s = $('fStart').value;
+      if (s && (!$('fEnd').value || toMin($('fEnd').value) <= toMin(s))) $('fEnd').value = fromMin(toMin(s) + 80);
+      syncPairs(); $('fErr').hidden = true;
+    });
+    $('fEnd').addEventListener('change', function () { syncPairs(); $('fErr').hidden = true; });
+    $('fSubject').addEventListener('change', function () {
+      if (editingId) return;
+      var v = $('fSubject').value.trim().toLowerCase();
+      var prev = state.items.filter(function (x) { return x.subject.toLowerCase() === v; }).pop();
+      if (!prev) return;
+      if (!$('fTeacher').value) $('fTeacher').value = prev.teacher;
+      if (!$('fRoom').value) $('fRoom').value = prev.room;
+    });
+    $('delBtn').addEventListener('click', function () {
+      var b = $('delBtn');
+      if (!b.classList.contains('armed')) {
+        b.classList.add('armed'); b.textContent = 'Точно видалити?';
+        clearTimeout(delTimer); delTimer = setTimeout(function () { b.classList.remove('armed'); b.textContent = 'Видалити'; }, 3500);
+        return;
+      }
+      state.items = state.items.filter(function (x) { return x.id !== editingId; });
+      persist(); render(); closeForm();
+    });
+    setInterval(renderBoard, 30000);
+  }
+
+  /* ---------- boot ---------- */
+  (function init() {
+    try { var ui = JSON.parse(lsGet(UI_KEY) || '{}'); if (ui.filter && (ui.filter === 'all' || SHORT[ui.filter])) state.filter = ui.filter; if (ui.view === 'today' || ui.view === 'week') state.view = ui.view; } catch (e) {}
+    try {
+      var saved = JSON.parse(lsGet(LS_KEY) || 'null');
+      if (saved && Array.isArray(saved.items)) state.items = cleanAll(saved.items);
+    } catch (e) {}
+    state.loading = !state.items.length;
+    bind(); render(); setStatus('local');
+
+    function localMode() {
+      store = null; state.canEdit = true; state.loading = false;
+      if (!state.items.length) { state.items = demoItems(); state.demo = true; }
+      render(); setStatus('local');
+    }
+    var failTimer = setTimeout(function () { if (state.loading) { state.loading = false; render(); setStatus('err'); } }, 8000);
+
+    (async function () {
+      try {
+        if (!window.claude || !window.claude.use) { localMode(); return; }
+        var res = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+        var db = res[0], user = res[1];
+        if (!db) { localMode(); return; }
+        state.canEdit = user ? !!(await user.canEdit()) : false;
+        var myId = user ? await user.id() : null;
+        store = db.doc('schedule/main');
+        var migrated = false;
+        store.onSnapshot(function (snap) {
+          if (snap.metadata.hasPendingWrites || saveTimer || inflight) return;
+          if (snap.exists) {
+            var d = snap.data() || {};
+            if (Array.isArray(d.items)) {
+              state.items = cleanAll(d.items); state.demo = false;
+              lsSet(LS_KEY, JSON.stringify({ items: state.items }));
+            }
+            state.loading = false; clearTimeout(failTimer); render(); setStatus('ok');
+          } else if (!snap.metadata.fromCache && !migrated) {
+            migrated = true;
+            (async function () {
+              if (state.canEdit) {
+                var items = [];
+                if (myId) { try { var old = await db.doc('data/users/' + myId + '/schedule').get(); if (old.exists) items = cleanAll((old.data() || {}).items); } catch (e) {} }
+                if (!items.length && !state.demo) items = state.items.slice();
+                if (items.length) { state.items = items; state.demo = false; state.loading = false; clearTimeout(failTimer); render(); flush(); return; }
+                state.items = demoItems(); state.demo = true;
+              } else { state.items = []; }
+              state.loading = false; clearTimeout(failTimer); render(); setStatus('ok');
+            })();
+          }
+        }, function () { localMode(); });
+      } catch (e) { localMode(); }
+    })();
+  })();
+})();
+</script>
+
+</body>
+</html>
